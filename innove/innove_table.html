@@ -1,0 +1,359 @@
+<table id="innoveData" class="table table-bordered table-hover" style="max-width: 100%;">
+</table>
+<input type="file" id="csvFileInput" style="display: none;" accept=".csv">
+
+<script>
+    $(document).ready(function () {
+        if (typeof rfplocationOptions === 'undefined') {
+            let rfplocationOptions = "";
+        }
+        var tabinnove = $('#innoveData').DataTable({
+            searchDelay: 400,
+            "paging": true,
+            "lengthChange": true,
+            "searching": false,
+            "info": true,
+            "autoWidth": false,
+            "responsive": true,
+            pageLength: 10,
+            "lengthMenu": [
+                [10, 50, 100, -1],
+                [10, 50, 100, 'All']
+            ],
+            "processing": true,
+            "serverSide": true,
+            scrollY: 200,
+            scrollX: true,
+            ajax: {
+                url: `/rfp/innove_table/`,
+                data: function (d) {
+
+                }
+            },
+            dom: 'Blfrtip',
+            buttons: [
+                {
+                text: 'Add new',
+                action: function (e, dt, button, config) {
+                    $.confirm({
+                        title: 'Add New Information',
+                        type: 'green',
+                        draggable: false,
+                        content: `
+                                <form action="" class="formName"> 
+                                <div class="form-group"> 
+                                <label>Account Number</label> 
+                                <input type="text" class="form-control" id="innove-account-number" required /> 
+                                <label>Type</label> 
+                                <input type="text" class="form-control" id="innove-type" required /> 
+                                <label>Cost Center</label> 
+                                <select id="set-cost-center" class="form-control" multiple="multiple"
+                                    data-placeholder="Select Cost Center"
+                                    style="width: 100%; box-sizing: border-box; margin-bottom: 5px;" required>
+
+                                </select>
+                                </div> 
+                                </form>`,
+                        buttons: {
+                            formSubmit: {
+                                text: 'Submit',
+                                keys: ['enter'],
+                                btnClass: 'btn-blue',
+                                action: function () {
+                                    const account_number = document
+                                        .querySelector(
+                                            "#innove-account-number").value
+                                    const type = document.querySelector(
+                                        "#innove-type").value
+                                    const cost_center_options = $('#set-cost-center option:checked').map(function() {
+                                    return $(this).val();}).get();
+                                    const cost_center = cost_center_options.join('- ');
+                                    if (!account_number | !type | !
+                                        cost_center) {
+                                        $.alert({
+                                            title: 'Empty Field',
+                                            content: `Account Number should not be empty.`,
+                                            type: 'red'
+                                        });
+                                        return;
+                                    }
+                                    var form = new FormData()
+                                    form.append('account_number',
+                                        account_number)
+                                    form.append('type', type)
+                                    form.append('cost_center', cost_center)
+                                    axios.post("/rfp/create_innove_account/", form).then(response => {
+                                        tabinnove.ajax.reload(); 
+                                        }).catch(function (error) {
+                                        catchError(error)
+
+                                    });
+                                    
+                                }
+                            },
+                            cancel: {
+                                text: 'cancel',
+                                keys: ['escape'],
+                                btnClass: 'btn-red',
+                                action: function () {}
+
+                            }
+                        },
+                        onContentReady: function () {
+                            rfplocationOptions = ""
+                            rfplocationOptions += `<option> </option>`;
+                            for (const locations of locations_rfp) {
+                                rfplocationOptions +=
+                                    `<option value='${locations.name}'>${locations.name}</option>`;
+                            }
+                            $('#set-cost-center').select2({
+                                multiple: false,
+                                dropdownParent: $('.jconfirm'),
+                            })
+                            $('#set-cost-center').html(rfplocationOptions);
+                        }
+                    });
+                }
+            }, 
+            {
+                text: 'Upload CSV',
+                action: function (e, dt, button, config) {
+                    $('#csvFileInput').trigger('click');
+                }
+            },
+        ],
+            columns: [{
+                    title: 'ID',
+                    visible: false
+                },
+                {
+                    title: 'Account Number',
+
+                },
+                {
+                    title: 'Type',
+
+                },
+                {
+                    title: 'Cost Center',
+                },
+                {
+                    title: 'Actions',
+                    render: function (data, type, row) {
+                            var buttonsHtml =
+                                `<button class="update-innove-account action-button btn btn-info btn-xs" 
+                             aria-hidden="true" style="background-color:#00cc00;margin-right: 5px;"><span class="glyphicon glyphicon-edit"></button>`
+                       
+                            buttonsHtml +=
+                                `<button class=" delete-innove-account action-button btn btn-info btn-xs" 
+                                aria-hidden="true" style="background-color:#ff3333;margin-right: 5px;"><span class="glyphicon glyphicon-remove"></button>`
+                        
+                        buttonsHtml += `</div>`
+                        return buttonsHtml;
+                    }
+                },
+            ],
+            rowCallback: function (row, data, index) {
+
+            },
+            initComplete: function () {
+                let api = this.api();
+                api.on('click', 'tbody .update-innove-account',
+                    function () {
+                        var updateRow = api.row($(this).closest('tr'))
+
+                        var rowNode = updateRow.node();
+                        var rowData = api.row($(this).closest('tr')).data();
+                        rowData.Id = rowData[0]
+                        rowData.account_number = rowData[1]
+                        rowData.name = rowData[2]
+                        rowData.cost_center = rowData[3]
+
+
+                        $.confirm({
+                            title: 'Edit Information',
+                            content: `
+                                <form action="" class="formName"> 
+                                <div class="form-group"> 
+                                <label>Account Number</label> 
+                                <input type="text" class="form-control" id="update-innove-account-number" required /> 
+                                <label>Name</label> 
+                                <input type="text" class="form-control" id="update-innove-name" required /> 
+                                <label>Cost Center</label> 
+                                <select id="update-cost-center" class="form-control" multiple="multiple"
+                                    data-placeholder="Select Cost Center"
+                                    style="width: 100%; box-sizing: border-box; margin-bottom: 5px;" required>
+
+                                </select>
+                                </div> 
+                                </form>`,
+                            buttons: {
+                                update: {
+                                    text: 'Update',
+                                    btnClass: 'btn-green',
+                                    action: function () {
+                                        const account_number = document
+                                            .querySelector(
+                                                "#update-innove-account-number")
+                                            .value
+                                        const type = document.querySelector(
+                                            "#update-innove-name").value
+                                        const cost_center_options = $(
+                                            '#update-cost-center option:checked'
+                                            ).map(function () {
+                                            return $(this).val();
+                                        }).get();
+                                        const cost_center = cost_center_options
+                                            .join('- ');
+                                        if (!account_number | !type | !
+                                            cost_center) {
+                                            $.alert({
+                                                title: 'Empty Field',
+                                                content: `Account Number should not be empty.`,
+                                                type: 'red'
+                                            });
+                                            return;
+                                        }
+                                        var form = new FormData()
+                                        form.append('id',
+                                            rowData.Id)
+                                        form.append('account_number',
+                                            account_number)
+                                        form.append('type', type)
+                                        form.append('cost_center', cost_center)
+
+                                        $.confirm({
+                                            title:'Confirm Action',
+                                            content:`Are you sure?`,
+                                            buttons:{
+                                                    confirm: {
+                                                    text: 'Confirm',
+                                                    btnClass: 'btn-green',
+                                                    action: function () {
+                                                        axios.post("/rfp/update_innove_account/",
+                                                            form).then(response => {
+                                                            tabinnove.ajax.reload();
+                                                            $.alert({
+                                                                title: 'Success',
+                                                                content: 'Information Successully Updated.',
+                                                                type: 'green',
+                                                            });
+                                                        }).catch(function (error) {
+                                                            $.alert({
+                                                                title:'Error',
+                                                                content:'An Error has occured',
+                                                                type:'red'
+                                                            })
+
+                                                        });
+                                                    }
+                                                },
+                                                cancel: {
+                                                text: 'cancel',
+                                                keys: ['escape'],
+                                                btnClass: 'btn-red',
+                                                action: function () {}
+                                            }
+                                            }
+                                        })
+                                        
+                                    }
+                                },
+                            },
+                            onContentReady: function () {
+                                rfplocationOptions = ""
+                                rfplocationOptions += `<option> </option>`;
+                                for (const locations of locations_rfp) {
+                                    rfplocationOptions +=
+                                        `<option value='${locations.name}'>${locations.name}</option>`;
+                                }
+                                $('#update-cost-center').select2({
+                                    multiple: false,
+                                    dropdownParent: $('.jconfirm'),
+                                })
+                                $('#update-cost-center').html(rfplocationOptions);
+                                $('#update-innove-account-number').val(rowData.account_number)
+                                $('#update-innove-name').val(rowData.name)
+                                $('#update-cost-center').val(rowData.cost_center).trigger('change');
+
+                            },
+                            closeIcon: true,
+                            draggable: false,
+
+
+                        });
+                    });
+                    api.on('click', 'tbody .delete-innove-account',function () {
+                        var updateRow = api.row($(this).closest('tr'))
+                        var rowNode = updateRow.node();
+                        var rowData = api.row($(this).closest('tr')).data();
+                        rowData.Id = rowData[0]
+
+                        $.confirm({
+                            title: 'Delete Account',
+                            content: `Confirm Delete`,
+                            buttons:{
+                                confirm: {
+                                text: 'Confirm',
+                                btnClass: 'btn-green',
+                                action: function () {
+                                    var form = new FormData()
+                                    form.append('id', rowData.Id)
+                                    axios.post("/rfp/delete_innove_account/",
+                                        form).then(response => {
+                                        tabinnove.ajax.reload();
+                                        $.alert({
+                                            title: 'Success',
+                                            content: 'Account Successully Deleted.',
+                                            type: 'green',
+                                        });
+                                    }).catch(function (error) {
+                                        $.alert({
+                                            title:'Error',
+                                            content:'An Error has occured',
+                                            type:'red'
+                                        })
+
+                                    });
+                                }
+                            },
+                            cancel: {
+                            text: 'cancel',
+                            keys: ['escape'],
+                            btnClass: 'btn-red',
+                            action: function () {}
+                        }
+                        },
+                      
+                            closeIcon: true,
+                            draggable: false,
+                        });
+                    });
+            }
+        })
+        $('#csvFileInput').on('change', function(event) {
+            var input = event.target;
+            var file = input.files[0];
+            var form = new FormData()
+            form.append('csv',file)
+            axios.post("/rfp/upload_innove_csv/",
+                form).then(response => {
+                tabinnove.ajax.reload();
+                $.alert({
+                    title: 'Success',
+                    content: "Information Successully Uploaded.<br>" + 
+                             "Remarks:<br>" + 
+                              response.data.remarks,
+                    type: 'green',
+                });
+            }).catch(function (error) {
+                $.alert({
+                    title:'Error',
+                    content:'An Error has occured',
+                    type:'red'
+                })
+
+            });
+        })
+    })
+</script>
