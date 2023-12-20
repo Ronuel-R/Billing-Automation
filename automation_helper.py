@@ -3,7 +3,8 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from datetime import datetime, timedelta
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from rfp.models import InnoveMasterList, PostpaidMasterList
-
+from django.db.models import Q
+from main.models import Location, Department
 def make_row_postpaid_master_list(data):
 
         arr = (data['id'],
@@ -92,6 +93,7 @@ def get_particulars_values(csvfile_path,target):
 
 def get_cost_center_values(csvfile_path,target):
     cost_center = []
+    cost_center_value = None
     with open(csvfile_path, 'r') as csvfile:
         csv_reader = csv.reader(csvfile)
 
@@ -106,13 +108,27 @@ def get_cost_center_values(csvfile_path,target):
                     cost_center_value = postpaid_obj.cost_center
 
                 elif target == 'innove':
-                    try:
-                        innove_obj = InnoveMasterList.objects.get(account_number=account_value)
-                        cost_center_value = innove_obj.cost_center
-                    except:
-                        cost_center_value = "No location set for account number {}".format(account_value)
+                    existing_location = None
+                    existing_department = None
+                    innove_obj = InnoveMasterList.objects.get(account_number=account_value)
+                    existing_location = Location.objects.filter(location=innove_obj.cost_center).exists()
+                    existing_department = Department.objects.filter(department=innove_obj.cost_center).exists()
 
-                cost_center.append(cost_center_value) # type: ignore
+                    if innove_obj and existing_location or existing_department:
+                        cost_center_value = innove_obj.cost_center
+
+                    else:
+                        try:
+                            innove_obj = InnoveMasterList.objects.get(account_number=account_value)
+                            cost_center_str = str(innove_obj.cost_center)
+                            result_list = cost_center_str.split(' & ')
+                            result_string = '\r\n'.join(result_list) + '\r\n'
+                            cost_center.append(result_string)
+                        except:
+                            cost_center_value = "No location set for account number {}".format(account_value)
+
+                if cost_center_value != None:
+                    cost_center.append(cost_center_value) # type: ignore
 
     return cost_center
 
@@ -198,3 +214,16 @@ def get_due_date(csvfile_path,target):
         formatted_due_date = due_date.strftime("%m-%d-%Y")
 
     return str(formatted_due_date)
+
+def get_dynamic_filter(search,target):
+        dynamic_filter = Q()
+        if target == 'postpaid':
+            if search:
+                dynamic_filter = dynamic_filter & (Q(account_number__icontains=search) |
+                                                    Q(name__icontains=search))
+        if target == 'innove':
+            if search:
+                dynamic_filter = dynamic_filter & (Q(account_number__icontains=search))
+
+            
+        return dynamic_filter

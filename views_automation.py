@@ -66,7 +66,6 @@ def rfp_automate_postpaid(request,*args,**kwargs):
             form = Create_RFPForm(info)
             
             RFPDPOST = zip(info['REFERENCE'],info['PARTICULARS'],info['COSTCENTER'],info['AMOUNT'])
-            print(info['DUEDATE'],info['AMTINWORDS'],info['TOTALAMOUNT'])
             if form.is_valid():
                 instance = form.save(commit=False)
                 instance.DEPT = assigned_user.department.department #type:ignore
@@ -212,11 +211,6 @@ def rfp_automate_innove(request,*args,**kwargs):
             form = Create_RFPForm(info)
             
             RFPDPOST = zip(info['REFERENCE'],info['PARTICULARS'],info['COSTCENTER'],info['AMOUNT'])
-            print(len(info['REFERENCE']),len(info['PARTICULARS']),len(info['COSTCENTER']),len(info['AMOUNT']),)
-            for COSTCENTERS in info['COSTCENTER']:
-                if not Location.objects.filter(location=COSTCENTERS).exists() and not Department.objects.filter(department=COSTCENTERS).exists():
-                    data['form_is_valid'] = False
-                    location_list.append("{}".format(COSTCENTERS))
 
             if form.is_valid():
                 instance = form.save(commit=False)
@@ -233,18 +227,16 @@ def rfp_automate_innove(request,*args,**kwargs):
                             if not PCVTORFPNO_RFP == REFERENCE:
                                 REFERENCE = PCVTORFPNO_RFP
 
-                        if Location.objects.filter(location=COSTCENTER).exists() or Department.objects.filter(department=COSTCENTER).exists():
-                            if COSTCENTER != "N/A":
-                                RFPDetails.objects.create(RFP_ID=instance
-                                ,REFERENCE=REFERENCE
-                                ,PARTICULARS=PARTICULARS
-                                ,COST_NAME=COSTCENTER
-                                ,AMOUNT=AMOUNT)
-                            else:
-                                pass
+                       
+                        if COSTCENTER != "N/A":
+                            RFPDetails.objects.create(RFP_ID=instance
+                            ,REFERENCE=REFERENCE
+                            ,PARTICULARS=PARTICULARS
+                            ,COST_NAME=COSTCENTER
+                            ,AMOUNT=AMOUNT)
                         else:
-                            data['form_is_valid'] = False
-                            location_list.append("Location not Existing: {}".format(COSTCENTER))
+                            pass
+
 
                 RFPhead = RFPHeader.objects.get(id=instance.id)
                 RFPhead.LOC= assigned_user.location.location #type:ignore
@@ -481,8 +473,9 @@ def get_postpaid_table(request,**kwargs):
     length = (datatables.get('length'))
     search = datatables.get('search[value]')
     draw = int(datatables.get('draw'))
-
-    postpaid_master_list_obj = PostpaidMasterList.objects.filter(status='A')
+    dynamic_filter = get_dynamic_filter(search,'postpaid') # type: ignore
+    
+    postpaid_master_list_obj = PostpaidMasterList.objects.filter(status='A').filter(dynamic_filter).distinct()
 
     records_total = len(postpaid_master_list_obj)
     records_filtered = records_total
@@ -507,8 +500,9 @@ def get_innove_table(request,**kwargs):
     length = (datatables.get('length'))
     search = datatables.get('search[value]')
     draw = int(datatables.get('draw'))
+    dynamic_filter = get_dynamic_filter(search,'innove') # type: ignore
 
-    innove_master_list_obj = InnoveMasterList.objects.filter(status='A')
+    innove_master_list_obj = InnoveMasterList.objects.filter(status='A').filter(dynamic_filter).distinct()
 
     records_total = len(innove_master_list_obj)
     records_filtered = records_total
@@ -616,9 +610,12 @@ def upload_postpaid_csv(request,**kwargs):
         existing_location = Location.objects.filter(location=row_dict['cost_center']).exists()
         existing_department = Department.objects.filter(department=row_dict['cost_center']).exists()
         # If the record doesn't exist, create and save it
-        if not existing_record and (existing_location or existing_department):
-            innove_instance = PostpaidMasterList(**row_dict)
-            innove_instance.save()
+        if not existing_record:
+            if existing_location or existing_department:
+                innove_instance = PostpaidMasterList(**row_dict)
+                innove_instance.save()
+            else:
+                remarks.append("Record with Account Number {} has no valid location. Skipping upload.<br>".format(row_dict['account_number']))
 
         elif existing_record.name != row_dict['name'] or existing_record.cost_center != row_dict['cost_center']: #type:ignore
             if row_dict['name'] != "":
@@ -653,18 +650,33 @@ def upload_innove_csv(request,**kwargs):
         try:
             existing_record = InnoveMasterList.objects.get(account_number=row_dict['account_number'])
         except:
-            pass
-        existing_location = Location.objects.filter(location=row_dict['cost_center']).exists()
-        existing_department = Department.objects.filter(department=row_dict['cost_center']).exists()
+            existing_record = None
+        try:
+            result_list = row_dict['cost_center'].split(' & ')
+            for location in result_list:
+                existing_location = Location.objects.filter(location=location).exists()
+                existing_department = Department.objects.filter(department=location).exists()
+                if (existing_location or existing_department) != True:
+                    remarks.append("Record with Account Number {} has a not valid location {}. Please update and reupload<br>".format(row_dict['account_number'],location))
+        except:
+            existing_location = Location.objects.filter(location=row_dict['cost_center']).exists()
+            existing_department = Department.objects.filter(department=row_dict['cost_center']).exists()
 
-        # If the record doesn't exist, create and save it
-        if not existing_record and (existing_location or existing_department):
-            innove_instance = InnoveMasterList(**row_dict)
-            innove_instance.save()
+        if existing_record == None:
+            if (existing_location or existing_department):
+                innove_instance = InnoveMasterList(account_number=row_dict['account_number'],
+                                                   type=row_dict['type'],
+                                                   cost_center=row_dict['cost_center'],
+                                                   status=row_dict['status']
+                                                   )
+                innove_instance.save()
+            else:
+                remarks.append("Record with Account Number {} has no valid location. Skipping upload.<br>".format(row_dict['account_number']))
 
-        elif existing_record.type != row_dict['type'] or existing_record.cost_center != row_dict['cost_center']: #type:ignore
+        elif existing_record and existing_record.type != row_dict['type'] or existing_record and existing_record.cost_center != row_dict['cost_center']: #type:ignore
             if row_dict['type'] != "":
                 existing_record.type = row_dict['type'] #type:ignore
+                existing_record.status = row_dict['status']
                 existing_record.save() #type:ignore
                 remarks.append("Record with Account Number {} successfully updated Type.<br>".format(row_dict['account_number']))
             else:
@@ -672,6 +684,7 @@ def upload_innove_csv(request,**kwargs):
 
             if existing_record.cost_center != row_dict['cost_center'] and (existing_location or existing_department): #type:ignore
                 existing_record.cost_center = row_dict['cost_center'] #type:ignore
+                existing_record.status = row_dict['status']
                 existing_record.save() #type:ignore
                 remarks.append("Record with Account Number {} successfully updated Cost Center.<br>".format(row_dict['account_number']))
             else:
