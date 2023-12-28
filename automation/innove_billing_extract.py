@@ -294,7 +294,7 @@ try:
     hostname = socket.gethostname()
     ip_address = socket.gethostbyname(hostname)
 
-    url = 'http://127.0.0.1:8000/rfp/automate/' if ip_address != '172.18.118.5' else 'http://portal.puremart.ph/rfp/automate/'
+    url = 'insert_api_here' if ip_address != '172.18.118.5' else 'insert_api_here'
     token = encode('automation', 'innove') # type: ignore
     headers = {
     'Authorization': token,
